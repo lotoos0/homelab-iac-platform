@@ -109,7 +109,7 @@ For v0.1 I plan to use DHCP with fixed reservations:
 | `worker-1` | `10.50.0.11` |
 | `worker-2` | `10.50.0.12` |
 
-Addresses `10.50.0.2`–`10.50.0.9` remain available for infrastructure and future expansion.
+Addresses `10.50.0.2`-`10.50.0.9` remain available for infrastructure and future expansion.
 
 The intended behavior is simple: when a VM boots, it requests an address through DHCP and receives its reserved address from libvirt. I still need to verify that this remains predictable after recreating a VM.
 
@@ -145,8 +145,8 @@ The VMs will share one Linux bridge, and the host will have the gateway interfac
 | Host -> VM            | host gateway interface -> Linux bridge                     | No     |
 | VM -> Internet        | bridge -> host routing -> physical LAN                     | Yes    |
 | VM -> DNS             | TBD - validate libvirt/dnsmasq behavior first               | Depends on resolver path |
-| Home LAN device -> VM | not required for v0.1                                       | —      |
-| Internet -> VM        | not required for v0.1                                       | —      |
+| Home LAN device -> VM | not required for v0.1                                       | -      |
+| Internet -> VM        | not required for v0.1                                       | -      |
 
 VM-to-VM traffic should stay inside the virtual network without involving the physical router. For now I only need the nodes to reliably reach each other over this network. Later it should become the basic network used by the Kubernetes nodes, but I am intentionally not designing Kubernetes networking here yet.
 
@@ -220,7 +220,7 @@ For v0.1 the important part is simpler: create the private network, boot one VM 
 | VM subnet       | `10.50.0.0/24`                  |
 | Gateway         | `10.50.0.1`                     |
 | Addressing      | DHCP with fixed reservations    |
-| Nodes           | `10.50.0.10`–`10.50.0.12`       |
+| Nodes           | `10.50.0.10`-`10.50.0.12`       |
 | Outbound access | NAT through the homelab host    |
 
 This is enough to start implementing v0.1 without coupling the cluster directly to the physical home LAN. More advanced networking can wait until there is an actual problem that requires it.
