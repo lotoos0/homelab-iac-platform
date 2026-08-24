@@ -1,8 +1,8 @@
 # VM Networking Design
 
-> **Status:** Draft · **Version:** v0.1 · **Implementation:** Not started
+> **Status:** Draft · **Version:** v0.1 · **Implementation:** Host-side network validated
 >
-> This document describes the networking model I currently plan to build. Some details may change once the first VMs actually exist.
+> The libvirt network now exists on the host and matches the planned v0.1 design. VM-level DHCP, DNS, SSH and Internet connectivity still need an actual guest before I can call the whole network validated.
 
 ## Why this document exists
 
@@ -139,14 +139,14 @@ This is the intended responsibility split for now. I may adjust it once I start 
 
 The VMs will share one Linux bridge, and the host will have the gateway interface `10.50.0.1` on that network.
 
-| Traffic path          | Planned path                                               | NAT    |
-| --------------------- | ---------------------------------------------------------- | ------ |
-| VM -> VM              | directly through the Linux bridge                          | No     |
-| Host -> VM            | host gateway interface -> Linux bridge                     | No     |
-| VM -> Internet        | bridge -> host routing -> physical LAN                     | Yes    |
-| VM -> DNS             | TBD - validate libvirt/dnsmasq behavior first               | Depends on resolver path |
-| Home LAN device -> VM | not required for v0.1                                       | -      |
-| Internet -> VM        | not required for v0.1                                       | -      |
+| Traffic path          | Planned path                                  | NAT                      |
+| --------------------- | --------------------------------------------- | ------------------------ |
+| VM -> VM              | directly through the Linux bridge             | No                       |
+| Host -> VM            | host gateway interface -> Linux bridge        | No                       |
+| VM -> Internet        | bridge -> host routing -> physical LAN        | Yes                      |
+| VM -> DNS             | TBD - validate libvirt/dnsmasq behavior first | Depends on resolver path |
+| Home LAN device -> VM | not required for v0.1                         | -                        |
+| Internet -> VM        | not required for v0.1                         | -                        |
 
 VM-to-VM traffic should stay inside the virtual network without involving the physical router. For now I only need the nodes to reliably reach each other over this network. Later it should become the basic network used by the Kubernetes nodes, but I am intentionally not designing Kubernetes networking here yet.
 
@@ -176,6 +176,98 @@ The repository includes the reproducible project addresses, but omits physical h
 - public IP addresses
 
 The goal is to document the platform, not publish my home network inventory.
+
+---
+
+## Manual implementation checkpoint
+
+On 2026-08-24 I created the first version of the project network manually in libvirt.
+
+I deliberately did this before Terraform. I want Terraform to reproduce a network I already understand and have tested, not become the place where I learn what every libvirt option does.
+
+The resulting host-side configuration is:
+
+| Setting           | Verified value              |
+| ----------------- | --------------------------- |
+| Network name      | `homelab-iac`               |
+| Network           | `10.50.0.0/24`              |
+| Gateway           | `10.50.0.1`                 |
+| Bridge            | `virbr50`                   |
+| Forward mode      | NAT                         |
+| DHCP dynamic pool | `10.50.0.100`-`10.50.0.200` |
+| Persistent        | Yes                         |
+| Autostart         | Yes                         |
+| Active            | Yes                         |
+
+The planned node addresses `10.50.0.10`-`10.50.0.12` remain outside the dynamic DHCP pool so they can later be used as fixed reservations.
+
+### What I actually tested
+
+The network was defined and started with libvirt:
+
+```bash
+virsh -c qemu:///system net-define ~/homelab-iac-network.xml
+virsh -c qemu:///system net-start homelab-iac
+virsh -c qemu:///system net-autostart homelab-iac
+```
+
+Libvirt then reported:
+
+```text
+homelab-iac   active   autostart: yes   persistent: yes
+```
+
+The bridge created by libvirt was also verified:
+
+```bash
+ip addr show virbr50
+```
+
+with:
+
+```text
+10.50.0.1/24
+```
+
+The generated libvirt configuration confirmed:
+
+```xml
+<forward mode='nat'/>
+<bridge name='virbr50' ... />
+<ip address='10.50.0.1' netmask='255.255.255.0'>
+```
+
+I also restarted `libvirtd` and checked the network again:
+
+```bash
+sudo systemctl restart libvirtd
+systemctl is-active libvirtd
+virsh -c qemu:///system net-list --all
+ip addr show virbr50
+```
+
+After the restart:
+
+- `libvirtd` returned `active`
+- `homelab-iac` remained active
+- autostart remained enabled
+- `virbr50` still existed
+- `10.50.0.1/24` was still assigned to the bridge
+
+The existing libvirt `default` network remained inactive and unchanged.
+
+### What this does not prove yet
+
+There is still no VM attached to this network, so I have **not** validated:
+
+- DHCP reservations
+- VM -> gateway connectivity
+- VM -> Internet connectivity
+- DNS resolution from a guest
+- host -> VM SSH
+- VM -> VM communication
+
+Those checks stay open until the first test VM exists. `virbr50` currently reports `NO-CARRIER`, which is expected because there is no guest interface attached to the bridge yet.
 
 ---
 
