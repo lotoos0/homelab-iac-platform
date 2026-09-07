@@ -1,4 +1,4 @@
 provider "proxmox" {
-  endpoint = "https://192.168.33.11:8006/"
+  endpoint = var.proxmox_endpoint
   insecure = true
 }
